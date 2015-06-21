@@ -1,0 +1,58 @@
+--- kernel/fork.c
++++ kernel/fork.c
+@@ -512,51 +627,15 @@ static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm)
+ 
+ 	prev = NULL;
+ 	for (mpnt = oldmm->mmap; mpnt; mpnt = mpnt->vm_next) {
+-		struct file *file;
+-
+ 		if (mpnt->vm_flags & VM_DONTCOPY) {
+ 			vm_stat_account(mm, mpnt->vm_flags, mpnt->vm_file,
+ 							-vma_pages(mpnt));
+ 			continue;
+ 		}
+-		charge = 0;
+-		if (mpnt->vm_flags & VM_ACCOUNT) {
+-			unsigned long len = vma_pages(mpnt);
+-
+-			if (security_vm_enough_memory_mm(oldmm, len)) /* sic */
+-				goto fail_nomem;
+-			charge = len;
+-		}
+-		tmp = kmem_cache_alloc(vm_area_cachep, GFP_KERNEL);
+-		if (!tmp)
+-			goto fail_nomem;
+-		*tmp = *mpnt;
+-		INIT_LIST_HEAD(&tmp->anon_vma_chain);
+-		retval = vma_dup_policy(mpnt, tmp);
+-		if (retval)
+-			goto fail_nomem_policy;
+-		tmp->vm_mm = mm;
+-		if (anon_vma_fork(tmp, mpnt))
+-			goto fail_nomem_anon_vma_fork;
+-		tmp->vm_flags &= ~VM_LOCKED;
+-		tmp->vm_next = tmp->vm_prev = NULL;
+-		file = tmp->vm_file;
+-		if (file) {
+-			struct inode *inode = file_inode(file);
+-			struct address_space *mapping = file->f_mapping;
+-
+-			get_file(file);
+-			if (tmp->vm_flags & VM_DENYWRITE)
+-				atomic_dec(&inode->i_writecount);
+-			i_mmap_lock_write(mapping);
+-			if (tmp->vm_flags & VM_SHARED)
+-				atomic_inc(&mapping->i_mmap_writable);
+-			flush_dcache_mmap_lock(mapping);
+-			/* insert tmp into the share list, just after mpnt */
+-			vma_interval_tree_insert_after(tmp, mpnt,
+-					&mapping->i_mmap);
+-			flush_dcache_mmap_unlock(mapping);
+-			i_mmap_unlock_write(mapping);
++		tmp = dup_vma(mm, oldmm, mpnt);
++		if (!tmp) {
++			retval = -ENOMEM;
++			goto out;
+ 		}
+ 
+ 		/*

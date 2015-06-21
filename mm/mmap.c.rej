@@ -1,0 +1,22 @@
+--- mm/mmap.c
++++ mm/mmap.c
+@@ -2929,10 +3365,18 @@ static int __split_vma(struct mm_struct *mm, struct vm_area_struct *vma,
+ 		new->vm_ops->close(new);
+ 	if (new->vm_file)
+ 		fput(new->vm_file);
+-	unlink_anon_vmas(new);
+  out_free_mpol:
+ 	mpol_put(vma_policy(new));
+  out_free_vma:
++
++#ifdef CONFIG_PAX_SEGMEXEC
++	if (new_m) {
++		unlink_anon_vmas(new_m);
++		kmem_cache_free(vm_area_cachep, new_m);
++	}
++#endif
++
++	unlink_anon_vmas(new);
+ 	kmem_cache_free(vm_area_cachep, new);
+  out_err:
+ 	return err;
